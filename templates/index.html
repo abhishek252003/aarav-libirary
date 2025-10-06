@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aarav Library - Seat Booking System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src='https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.css' rel='stylesheet' />
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    screens: {
+                        'xs': '475px',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .seat-available {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .seat-occupied {
+            background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .seat-selected {
+            transform: scale(1.05);
+            box-shadow: 0 0 0 3px #3b82f6, 0 10px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .form-card {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+        }
+        
+        .seat-card {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+        }
+        
+        .input-field {
+            background-color: #f8fafc;
+            border: 2px solid #e2e8f0;
+            transition: all 0.3s ease;
+        }
+        
+        .input-field:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+        }
+        
+        .stat-card {
+            transition: all 0.3s ease;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-2xl shadow-xl p-4 mb-6 xs:p-6">
+            <div class="flex flex-col xs:flex-row justify-between items-center gap-4">
+                <div class="text-center xs:text-left">
+                    <h1 class="text-2xl xs:text-3xl font-bold flex items-center">
+                        <i class="fas fa-book-reader mr-3"></i>
+                        <span>Aarav Library</span>
+                    </h1>
+                    <p class="mt-1 text-blue-100 text-sm xs:text-base">Book your study seat with ease</p>
+                </div>
+                <div class="text-center">
+                    <button onclick="showAdminPanel()" class="bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-bold py-2 px-4 rounded-full text-sm xs:text-base transition-all duration-300 transform hover:scale-105">
+                        <i class="fas fa-user-shield mr-2"></i>Admin Panel
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Real-time Notifications -->
+        <div id="notificationsContainer" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+        <!-- Real-time Status -->
+        <div id="connectionStatus" class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-3 mb-4 rounded-lg text-sm xs:text-base hidden">
+            <p class="flex items-center"><i class="fas fa-spinner fa-spin mr-2"></i>Connecting to real-time updates...</p>
+        </div>
+
+        <!-- Stats Overview -->
+        <section class="grid grid-cols-2 xs:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="stat-card bg-white p-4">
+                <div class="flex items-center">
+                    <div class="bg-blue-100 p-3 rounded-full mr-3">
+                        <i class="fas fa-users text-blue-500 text-xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-xs xs:text-sm">Total Students</p>
+                        <p id="totalStudents" class="text-2xl font-bold text-blue-600">0</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="stat-card bg-white p-4">
+                <div class="flex items-center">
+                    <div class="bg-green-100 p-3 rounded-full mr-3">
+                        <i class="fas fa-couch text-green-500 text-xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-xs xs:text-sm">Total Seats</p>
+                        <p id="totalSeats" class="text-2xl font-bold text-green-600">0</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="stat-card bg-white p-4">
+                <div class="flex items-center">
+                    <div class="bg-yellow-100 p-3 rounded-full mr-3">
+                        <i class="fas fa-calendar-alt text-yellow-500 text-xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-xs xs:text-sm">Active Bookings</p>
+                        <p id="activeBookings" class="text-2xl font-bold text-yellow-600">0</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="stat-card bg-white p-4">
+                <div class="flex items-center">
+                    <div class="bg-purple-100 p-3 rounded-full mr-3">
+                        <i class="fas fa-chair text-purple-500 text-xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-xs xs:text-sm">Available Seats</p>
+                        <p id="availableSeats" class="text-2xl font-bold text-purple-600">0</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Booking Section -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- Student Information Form -->
+            <div class="form-card p-5 xs:p-6">
+                <h2 class="text-xl xs:text-2xl font-bold mb-4 xs:mb-6 text-gray-800 flex items-center">
+                    <i class="fas fa-user-graduate mr-3 text-blue-500"></i>
+                    Student Information
+                </h2>
+                
+                <form id="bookingForm" class="space-y-4">
+                    <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="studentName">
+                            Full Name <span class="text-red-500">*</span>
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i class="fas fa-user text-gray-400"></i>
+                            </div>
+                            <input class="input-field pl-10 w-full py-3 px-4 rounded-lg text-gray-700 leading-tight focus:outline-none" 
+                                   id="studentName" type="text" placeholder="Enter your full name">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="studentEmail">
+                            Email <span class="text-red-500">*</span>
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i class="fas fa-envelope text-gray-400"></i>
+                            </div>
+                            <input class="input-field pl-10 w-full py-3 px-4 rounded-lg text-gray-700 leading-tight focus:outline-none" 
+                                   id="studentEmail" type="email" placeholder="Enter your email">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="studentPhone">
+                            Phone Number
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i class="fas fa-phone text-gray-400"></i>
+                            </div>
+                            <input class="input-field pl-10 w-full py-3 px-4 rounded-lg text-gray-700 leading-tight focus:outline-none" 
+                                   id="studentPhone" type="text" placeholder="Enter your phone number">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="shiftSelect">
+                            Select Shift <span class="text-red-500">*</span>
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i class="fas fa-clock text-gray-400"></i>
+                            </div>
+                            <select class="input-field pl-10 w-full py-3 px-4 rounded-lg text-gray-700 leading-tight focus:outline-none appearance-none" 
+                                    id="shiftSelect">
+                                <option value="">Select a shift</option>
+                            </select>
+                            <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                <i class="fas fa-chevron-down text-gray-400"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="bookingDate">
+                            Booking Date <span class="text-red-500">*</span>
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i class="fas fa-calendar text-gray-400"></i>
+                            </div>
+                            <input class="input-field pl-10 w-full py-3 px-4 rounded-lg text-gray-700 leading-tight focus:outline-none" 
+                                   id="bookingDate" type="date">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Seat Selection -->
+            <div class="seat-card p-5 xs:p-6">
+                <h2 class="text-xl xs:text-2xl font-bold mb-4 xs:mb-6 text-gray-800 flex items-center">
+                    <i class="fas fa-th-large mr-3 text-green-500"></i>
+                    Select Your Seat
+                </h2>
+                
+                <div class="mb-5">
+                    <div class="flex flex-wrap items-center gap-3 mb-3">
+                        <div class="flex items-center">
+                            <div class="w-5 h-5 seat-available rounded mr-2"></div>
+                            <span class="text-sm">Available</span>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-5 h-5 seat-occupied rounded mr-2"></div>
+                            <span class="text-sm">Occupied</span>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-5 h-5 bg-blue-500 rounded mr-2"></div>
+                            <span class="text-sm">Selected</span>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <p class="text-blue-800 text-sm flex items-center">
+                            <i class="fas fa-info-circle mr-2"></i>
+                            <span id="seatSelectionInfo">Please select a seat from the grid below</span>
+                        </p>
+                    </div>
+                </div>
+                
+                <div id="seatsLayout" class="grid grid-cols-4 xs:grid-cols-5 gap-3 mt-4">
+                    <!-- Seats will be dynamically loaded here -->
+                </div>
+            </div>
+        </section>
+        
+        <!-- Confirm Booking Button -->
+        <div class="text-center mb-6">
+            <button onclick="bookSeat()" 
+                    class="btn-primary text-white font-bold py-3 px-8 rounded-full text-lg">
+                <i class="fas fa-book mr-2"></i>Confirm Booking
+            </button>
+        </div>
+        
+        <!-- Current Bookings -->
+        <section class="bg-white rounded-2xl shadow-lg p-5 xs:p-6 mb-6">
+            <h2 class="text-xl xs:text-2xl font-bold mb-4 xs:mb-6 text-gray-800 flex items-center">
+                <i class="fas fa-history mr-3 text-indigo-500"></i>
+                Current Bookings
+            </h2>
+            <div id="bookingsList" class="overflow-x-auto">
+                <table class="min-w-full bg-white text-sm">
+                    <thead>
+                        <tr class="bg-gray-100">
+                            <th class="py-3 px-4 text-left font-semibold text-gray-600">Student</th>
+                            <th class="py-3 px-4 text-left font-semibold text-gray-600">Shift</th>
+                            <th class="py-3 px-4 text-left font-semibold text-gray-600">Seat</th>
+                            <th class="py-3 px-4 text-left font-semibold text-gray-600">Date</th>
+                            <th class="py-3 px-4 text-left font-semibold text-gray-600">Booked At</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bookingsTableBody" class="divide-y divide-gray-200">
+                        <!-- Bookings will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        
+        <!-- Contact Section -->
+        <section class="bg-white rounded-2xl shadow-lg p-5 xs:p-6">
+            <h2 class="text-xl xs:text-2xl font-bold mb-4 xs:mb-6 text-gray-800 flex items-center">
+                <i class="fas fa-map-marker-alt mr-3 text-red-500"></i>
+                Contact & Location
+            </h2>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Contact Information -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-4 text-gray-700">Our Location</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-start">
+                            <div class="bg-blue-100 p-3 rounded-full mr-4">
+                                <i class="fas fa-map-marker-alt text-blue-500"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-gray-800">Address</h4>
+                                <p class="text-gray-600">Sector 17, Chandigarh<br>Near Sukhna Lake<br>Pin Code: 140401</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start">
+                            <div class="bg-green-100 p-3 rounded-full mr-4">
+                                <i class="fas fa-clock text-green-500"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-gray-800">Opening Hours</h4>
+                                <p class="text-gray-600">Monday - Friday: 8:00 AM - 9:00 PM<br>Saturday: 9:00 AM - 6:00 PM<br>Sunday: 10:00 AM - 4:00 PM</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start">
+                            <div class="bg-purple-100 p-3 rounded-full mr-4">
+                                <i class="fas fa-phone-alt text-purple-500"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-gray-800">Contact</h4>
+                                <p class="text-gray-600">Phone: +91 98765 43210<br>Email: info@aaravlibrary.com</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6">
+                        <h3 class="text-lg font-semibold mb-4 text-gray-700">Follow Us</h3>
+                        <div class="flex space-x-4">
+                            <a href="https://www.instagram.com/the_art_gallery64/" target="_blank" class="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-3 rounded-full hover:from-purple-600 hover:to-pink-600 transition duration-300">
+                                <i class="fab fa-instagram"></i>
+                            </a>
+                            <a href="#" class="bg-blue-600 text-white p-3 rounded-full hover:bg-blue-700 transition duration-300">
+                                <i class="fab fa-facebook-f"></i>
+                            </a>
+                            <a href="#" class="bg-blue-400 text-white p-3 rounded-full hover:bg-blue-500 transition duration-300">
+                                <i class="fab fa-twitter"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Map -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-4 text-gray-700">Find Us</h3>
+                    <div id="map" class="w-full h-80 rounded-xl overflow-hidden">
+                        <!-- Map will be initialized here -->
+                    </div>
+                    <div class="mt-3 text-sm text-gray-600">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        Sector 17, Chandigarh near Sukhna Lake
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Admin Login Modal -->
+    <div id="adminModal" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center p-4 z-50">
+        <div class="bg-white rounded-2xl shadow-2xl p-5 xs:p-6 w-full max-w-xs xs:max-w-sm">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-800">Admin Login</h3>
+                <button onclick="closeAdminModal()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="mb-5">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="adminPassword">
+                    Password
+                </label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fas fa-lock text-gray-400"></i>
+                    </div>
+                    <input class="input-field pl-10 w-full py-3 px-4 rounded-lg text-gray-700 leading-tight focus:outline-none" 
+                           id="adminPassword" type="password" placeholder="Enter admin password">
+                </div>
+            </div>
+            <div class="flex justify-end gap-3">
+                <button onclick="closeAdminModal()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                    Cancel
+                </button>
+                <button onclick="loginAdmin()" class="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                    Login
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize WebSocket connection
+        const socket = io();
+        
+        // Notification system
+        function showNotification(message, type = 'info') {
+            const container = document.getElementById('notificationsContainer');
+            const notification = document.createElement('div');
+            
+            let bgColor = 'bg-blue-500';
+            let icon = 'fa-info-circle';
+            if (type === 'success') {
+                bgColor = 'bg-green-500';
+                icon = 'fa-check-circle';
+            }
+            if (type === 'error') {
+                bgColor = 'bg-red-500';
+                icon = 'fa-exclamation-circle';
+            }
+            if (type === 'warning') {
+                bgColor = 'bg-yellow-500';
+                icon = 'fa-exclamation-triangle';
+            }
+            
+            notification.className = `text-white px-4 py-3 rounded-lg shadow-lg transform transition-transform duration-300 ${bgColor} flex items-center`;
+            notification.innerHTML = `
+                <i class="fas ${icon} mr-2"></i>
+                <span>${message}</span>
+            `;
+            
+            container.appendChild(notification);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                notification.classList.add('translate-x-full', 'opacity-0');
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }, 5000);
+        }
+        
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set today's date as default
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('bookingDate').value = today;
+            
+            // Load data
+            loadShifts();
+            loadSeats();
+            loadBookings();
+            loadStats();
+            
+            // Initialize map
+            initMap();
+            
+            // Setup WebSocket listeners
+            setupWebSocket();
+        });
+
+        // Initialize Mapbox map
+        function initMap() {
+            // Set your Mapbox access token here
+            mapboxgl.accessToken = 'pk.eyJ1IjoiYWJoaXNoZWsyNjAzNCIsImEiOiJjbWQxYW9pZjkwd3g4MmtxcG81Ym5vOWVoIn0.pb0x8wSuEj01_u05Lspqnw';
+            
+            // Check if mapboxgl is loaded
+            if (typeof mapboxgl === 'undefined') {
+                console.error('Mapbox GL JS is not loaded');
+                document.getElementById('map').innerHTML = `
+                    <div class="text-center p-8">
+                        <i class="fas fa-map-marked-alt text-4xl text-gray-400 mb-3"></i>
+                        <p class="text-gray-500">Map loading failed</p>
+                        <p class="text-sm text-gray-400 mt-2">Sector 17, Chandigarh<br>Near Sukhna Lake</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            try {
+                // Initialize the map
+                const map = new mapboxgl.Map({
+                    container: 'map', // container ID
+                    style: 'mapbox://styles/mapbox/streets-v11', // style URL
+                    center: [76.7794, 30.7333], // Chandigarh coordinates [lng, lat]
+                    zoom: 14 // starting zoom
+                });
+                
+                // Add zoom and rotation controls to the map
+                map.addControl(new mapboxgl.NavigationControl());
+                
+                // Add a marker at the library location
+                new mapboxgl.Marker({color: "#3b82f6"})
+                    .setLngLat([76.7794, 30.7333]) // Chandigarh coordinates
+                    .setPopup(new mapboxgl.Popup().setHTML("<h3 class='font-bold'>Aarav Library</h3><p>Sector 17, Chandigarh<br>Near Sukhna Lake</p>"))
+                    .addTo(map);
+                    
+                // Add a scale control to the map
+                map.addControl(new mapboxgl.ScaleControl());
+            } catch (error) {
+                console.error('Error initializing map:', error);
+                document.getElementById('map').innerHTML = `
+                    <div class="text-center p-8">
+                        <i class="fas fa-exclamation-triangle text-4xl text-yellow-500 mb-3"></i>
+                        <p class="text-gray-500">Map initialization failed</p>
+                        <p class="text-sm text-gray-400 mt-2">Sector 17, Chandigarh<br>Near Sukhna Lake</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Setup WebSocket connection
+        function setupWebSocket() {
+            // Show connection status
+            const statusDiv = document.getElementById('connectionStatus');
+            statusDiv.classList.remove('hidden');
+            
+            socket.on('connect', function() {
+                console.log('Connected to server');
+                statusDiv.innerHTML = '<p class="flex items-center text-green-700"><i class="fas fa-check-circle mr-2"></i>Connected to real-time updates</p>';
+                setTimeout(() => {
+                    statusDiv.classList.add('hidden');
+                }, 3000);
+                
+                // Request initial updates
+                socket.emit('request_seats_update');
+                socket.emit('request_bookings_update');
+                socket.emit('request_stats_update');
+                
+                showNotification('Connected to real-time updates', 'success');
+            });
+            
+            socket.on('disconnect', function() {
+                console.log('Disconnected from server');
+                statusDiv.innerHTML = '<p class="flex items-center text-red-700"><i class="fas fa-exclamation-circle mr-2"></i>Disconnected from real-time updates</p>';
+                statusDiv.classList.remove('hidden');
+                showNotification('Disconnected from real-time updates', 'error');
+            });
+            
+            socket.on('seats_update', function(seats) {
+                updateSeatsLayout(seats);
+            });
+            
+            socket.on('bookings_update', function(bookings) {
+                updateBookingsTable(bookings);
+            });
+            
+            socket.on('stats_update', function(stats) {
+                updateStats(stats);
+            });
+            
+            socket.on('notification', function(data) {
+                showNotification(data.message, data.type);
+            });
+            
+            socket.on('status', function(data) {
+                console.log('Server status:', data.msg);
+            });
+        }
+
+        // Load stats from API
+        function loadStats() {
+            fetch('/api/stats')
+                .then(response => response.json())
+                .then(stats => {
+                    updateStats(stats);
+                });
+        }
+
+        // Update stats
+        function updateStats(stats) {
+            document.getElementById('totalStudents').textContent = stats.students;
+            document.getElementById('totalSeats').textContent = stats.seats;
+            document.getElementById('activeBookings').textContent = stats.bookings;
+            document.getElementById('availableSeats').textContent = stats.available_seats;
+        }
+
+        // Load shifts from API
+        function loadShifts() {
+            fetch('/api/shifts')
+                .then(response => response.json())
+                .then(shifts => {
+                    const shiftSelect = document.getElementById('shiftSelect');
+                    // Clear existing options except the first one
+                    shiftSelect.innerHTML = '<option value="">Select a shift</option>';
+                    shifts.forEach(shift => {
+                        const option = document.createElement('option');
+                        option.value = shift.id;
+                        option.textContent = `${shift.name} (${shift.start_time} - ${shift.end_time})`;
+                        shiftSelect.appendChild(option);
+                    });
+                });
+        }
+
+        // Load seats from API
+        function loadSeats() {
+            fetch('/api/seats')
+                .then(response => response.json())
+                .then(seats => {
+                    updateSeatsLayout(seats);
+                });
+        }
+
+        // Update seats layout
+        function updateSeatsLayout(seats) {
+            const seatsLayout = document.getElementById('seatsLayout');
+            seatsLayout.innerHTML = '';
+            
+            seats.forEach(seat => {
+                const seatElement = document.createElement('div');
+                seatElement.className = `h-16 rounded-xl flex items-center justify-center cursor-pointer transform transition-all duration-300 text-white font-bold text-sm ${
+                    seat.status === 'available' ? 'seat-available' : 'seat-occupied'
+                }`;
+                seatElement.textContent = seat.seat_number;
+                seatElement.dataset.seatId = seat.id;
+                
+                if (seat.status === 'occupied') {
+                    seatElement.title = `Occupied by ${seat.student_name} (${seat.shift_name})`;
+                } else {
+                    seatElement.title = 'Available - Click to select';
+                    seatElement.onclick = () => selectSeat(seat.id, seat.seat_number);
+                }
+                
+                seatsLayout.appendChild(seatElement);
+            });
+        }
+
+        // Load bookings from API
+        function loadBookings() {
+            fetch('/api/bookings')
+                .then(response => response.json())
+                .then(bookings => {
+                    updateBookingsTable(bookings);
+                });
+        }
+
+        // Update bookings table
+        function updateBookingsTable(bookings) {
+            const bookingsTableBody = document.getElementById('bookingsTableBody');
+            bookingsTableBody.innerHTML = '';
+            
+            if (bookings.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td colspan="5" class="py-4 px-4 text-center text-gray-500">
+                        <i class="fas fa-inbox mr-2"></i>No bookings found
+                    </td>
+                `;
+                bookingsTableBody.appendChild(row);
+                return;
+            }
+            
+            bookings.forEach(booking => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50';
+                row.innerHTML = `
+                    <td class="py-3 px-4">${booking.student_name}</td>
+                    <td class="py-3 px-4">${booking.shift_name}</td>
+                    <td class="py-3 px-4">
+                        <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
+                            ${booking.seat_number}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4">${booking.booking_date}</td>
+                    <td class="py-3 px-4 text-gray-500 text-sm">${booking.created_at}</td>
+                `;
+                bookingsTableBody.appendChild(row);
+            });
+        }
+
+        // Select a seat
+        let selectedSeatId = null;
+        let selectedSeatNumber = null;
+        function selectSeat(seatId, seatNumber) {
+            // Remove selection from all seats
+            document.querySelectorAll('#seatsLayout > div').forEach(seat => {
+                seat.classList.remove('seat-selected');
+            });
+            
+            // Add selection to clicked seat
+            const selectedSeat = document.querySelector(`[data-seat-id="${seatId}"]`);
+            if (selectedSeat) {
+                selectedSeat.classList.add('seat-selected');
+                selectedSeatId = seatId;
+                selectedSeatNumber = seatNumber;
+                document.getElementById('seatSelectionInfo').innerHTML = 
+                    `<i class="fas fa-check-circle mr-2"></i>Selected seat: <strong>${seatNumber}</strong>`;
+            }
+        }
+
+        // Book a seat
+        function bookSeat() {
+            const studentName = document.getElementById('studentName').value;
+            const studentEmail = document.getElementById('studentEmail').value;
+            const studentPhone = document.getElementById('studentPhone').value;
+            const shiftId = document.getElementById('shiftSelect').value;
+            const bookingDate = document.getElementById('bookingDate').value;
+            
+            if (!studentName || !studentEmail || !shiftId || !selectedSeatId || !bookingDate) {
+                showNotification('Please fill all required fields and select a seat', 'error');
+                return;
+            }
+            
+            const bookingData = {
+                student_name: studentName,
+                student_email: studentEmail,
+                student_phone: studentPhone,
+                shift_id: parseInt(shiftId),
+                seat_id: selectedSeatId,
+                booking_date: bookingDate
+            };
+            
+            fetch('/api/book-seat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(bookingData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification(data.message, 'success');
+                    // Reset form
+                    document.getElementById('bookingForm').reset();
+                    document.getElementById('bookingDate').value = new Date().toISOString().split('T')[0];
+                    selectedSeatId = null;
+                    selectedSeatNumber = null;
+                    document.getElementById('seatSelectionInfo').innerHTML = 
+                        '<i class="fas fa-info-circle mr-2"></i>Please select a seat from the grid below';
+                    // Remove seat selection
+                    document.querySelectorAll('#seatsLayout > div').forEach(seat => {
+                        seat.classList.remove('seat-selected');
+                    });
+                } else {
+                    showNotification('Booking failed: ' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showNotification('Network error: ' + error.message, 'error');
+            });
+        }
+
+        // Admin panel functions
+        function showAdminPanel() {
+            document.getElementById('adminModal').classList.remove('hidden');
+            document.getElementById('adminModal').classList.add('flex');
+        }
+
+        function closeAdminModal() {
+            document.getElementById('adminModal').classList.add('hidden');
+            document.getElementById('adminModal').classList.remove('flex');
+            document.getElementById('adminPassword').value = '';
+        }
+
+        function loginAdmin() {
+            // Simple password check (in a real app, this would be more secure)
+            const password = document.getElementById('adminPassword').value;
+            if (password === 'Aarav@2023') { // Default admin password
+                window.location.href = '/admin';
+            } else {
+                showNotification('Incorrect password', 'error');
+            }
+        }
+    </script>
+</body>
+</html>
