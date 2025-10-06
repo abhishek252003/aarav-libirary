@@ -667,6 +667,14 @@ def health_check():
 
 if __name__ == '__main__':
     init_db()
+    # Small delay to ensure proper initialization
+    import time
+    time.sleep(1)
     # Use the PORT environment variable for Render deployment
     port = int(os.environ.get('PORT', 5003))
-    socketio.run(app, debug=False, host='0.0.0.0', port=port)
+    # For production deployment, allow unsafe Werkzeug or use eventlet
+    try:
+        socketio.run(app, debug=False, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)
+    except TypeError:
+        # Fallback for older versions of Flask-SocketIO
+        socketio.run(app, debug=False, host='0.0.0.0', port=port)
