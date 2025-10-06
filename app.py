@@ -661,6 +661,10 @@ def get_shifts_data():
     
     return shift_list
 
+@app.route('/health')
+def health_check():
+    return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
+
 if __name__ == '__main__':
     init_db()
     # Use the PORT environment variable for Render deployment
